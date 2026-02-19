@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes">
+    <title>Управление запасами Wildberries</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Навигация -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <i class="fas fa-boxes"></i>
+                <span>WB Запасы</span>
+            </div>
+            <ul class="nav-menu" id="navMenu">
+                <li><a href="#" onclick="showPage('upload', event)"><i class="fas fa-upload"></i> Загрузка</a></li>
+                <li><a href="#" onclick="showPage('warehouses', event)"><i class="fas fa-warehouse"></i> Склады</a></li>
+                <li><a href="#" onclick="showPage('products', event)"><i class="fas fa-table"></i> Все товары</a></li>
+                <li><a href="#" onclick="showPage('shipments', event)"><i class="fas fa-clock"></i> Отгрузки</a></li>
+            </ul>
+            <button class="nav-toggle" onclick="toggleMenu()">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Главная страница: Загрузка данных -->
+    <div id="uploadPage" class="page active">
+        <div class="container">
+            <div class="page-header">
+                <h1><i class="fas fa-upload"></i> Загрузка данных из Wildberries</h1>
+                <p>Импортируйте файлы Excel или CSV с данными о товарах</p>
+            </div>
+            
+            <div class="upload-section">
+                <div class="upload-card">
+                    <div class="upload-icon">
+                        <i class="fas fa-file-excel"></i>
+                    </div>
+                    <h3>Загрузить файл</h3>
+                    <p>Поддерживаются форматы: Excel (.xlsx, .xls) и CSV (.csv)</p>
+                    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none">
+                    <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                        <i class="fas fa-folder-open"></i> Выбрать файл
+                    </button>
+                    <div id="uploadStatus" class="upload-status"></div>
+                </div>
+
+                <div class="info-card">
+                    <h3><i class="fas fa-info-circle"></i> Формат файла</h3>
+                    <p>Файл должен содержать следующие столбцы:</p>
+                    <ul>
+                        <li><strong>Склад</strong> - название склада</li>
+                        <li><strong>Артикул продавца</strong> - артикул товара</li>
+                        <li><strong>Размер</strong> - размер товара</li>
+                        <li><strong>Наименование</strong> - название товара</li>
+                        <li><strong>Бренд</strong> - бренд товара</li>
+                        <li><strong>Продано / Выкупили, шт.</strong> - количество проданных единиц за 30 дней</li>
+                        <li><strong>Остаток / Текущий остаток, шт.</strong> - текущий остаток на складе</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="stats-section" id="statsSection" style="display:none">
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-box"></i></div>
+                    <div class="stat-info">
+                        <h3 id="totalProducts">0</h3>
+                        <p>Всего товаров</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-warehouse"></i></div>
+                    <div class="stat-info">
+                        <h3 id="totalWarehouses">0</h3>
+                        <p>Складов</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                    <div class="stat-info">
+                        <h3 id="urgentProducts">0</h3>
+                        <p>Срочных товаров</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Страница: Склады и доставка -->
+    <div id="warehousesPage" class="page">
+        <div class="container">
+            <div class="page-header">
+                <h1><i class="fas fa-warehouse"></i> Склады и доставка</h1>
+                <p>Управление складами и настройка времени доставки</p>
+            </div>
+
+            <div class="warehouse-section">
+                <div class="table-container">
+                    <table class="data-table" id="warehousesTable">
+                        <thead>
+                            <tr>
+                                <th>Склад</th>
+                                <th>Дней доставки</th>
+                                <th>Ожидаемая отгрузка (+12 дней)</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="warehousesTableBody">
+                            <!-- Данные загружаются динамически -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Страница: Основная таблица товаров -->
+    <div id="productsPage" class="page">
+        <div class="container-fluid">
+            <div class="page-header">
+                <h1 id="productsPageTitle"><i class="fas fa-table"></i> Все товары</h1>
+                <button id="backButton" class="btn btn-secondary" onclick="clearWarehouseFilter()" style="display:none">
+                    <i class="fas fa-arrow-left"></i> Назад ко всем складам
+                </button>
+            </div>
+
+            <div class="filters-section">
+                <div class="filter-group">
+                    <label><i class="fas fa-filter"></i> Фильтр по складу:</label>
+                    <select id="warehouseFilter" onchange="filterProducts()">
+                        <option value="">Все склады</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label><i class="fas fa-tag"></i> Фильтр по артикулу:</label>
+                    <select id="articleFilter" onchange="filterProducts()">
+                        <option value="">Все артикулы</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label><i class="fas fa-search"></i> Поиск по товарам:</label>
+                    <input type="text" id="searchInput" placeholder="Наименование или бренд..." oninput="filterProducts()">
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="data-table products-table" id="productsTable">
+                    <thead>
+                        <tr>
+                            <th onclick="sortTable('warehouse')">Склад <i class="fas fa-sort"></i></th>
+                            <th onclick="sortTable('seller_article')">Артикул продавца <i class="fas fa-sort"></i></th>
+                            <th onclick="sortTable('size')">Размер <i class="fas fa-sort"></i></th>
+                            <th onclick="sortTable('name')">Наименование <i class="fas fa-sort"></i></th>
+                            <th onclick="sortTable('brand')">Бренд <i class="fas fa-sort"></i></th>
+                            <th onclick="sortTable('sold')">Продано <i class="fas fa-sort"></i></th>
+                            <th onclick="sortTable('stock')">Остаток <i class="fas fa-sort"></i></th>
+                            <th onclick="sortTable('sales_per_day')">Продажи/день <i class="fas fa-sort"></i></th>
+                            <th onclick="sortTable('needed_45')">Нужно на 45 дней <i class="fas fa-sort"></i></th>
+                            <th onclick="sortTable('to_supply')">К поставке <i class="fas fa-sort"></i></th>
+                            <th onclick="sortTable('days_to_zero')">Дней до 0 <i class="fas fa-sort"></i></th>
+                            <th onclick="sortTable('risk_date')">Дата риска <i class="fas fa-sort"></i></th>
+                            <th>Доставка дней</th>
+                            <th>Запуск сборки</th>
+                            <th>Активность</th>
+                        </tr>
+                    </thead>
+                    <tbody id="productsTableBody">
+                        <!-- Данные загружаются динамически -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Страница: Ближайшие отгрузки -->
+    <div id="shipmentsPage" class="page">
+        <div class="container">
+            <div class="page-header">
+                <h1><i class="fas fa-clock"></i> Ближайшие отгрузки</h1>
+                <p>Склады с ближайшими датами отгрузки (+12 дней от сборки)</p>
+            </div>
+
+            <div class="shipments-grid" id="shipmentsGrid">
+                <!-- Карточки загружаются динамически -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для редактирования дней доставки -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeEditModal()">&times;</span>
+            <h2><i class="fas fa-edit"></i> Редактировать склад</h2>
+            <form id="editWarehouseForm" onsubmit="saveWarehouse(event)">
+                <input type="hidden" id="editWarehouseId">
+                <div class="form-group">
+                    <label>Название склада:</label>
+                    <input type="text" id="editWarehouseName" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Дней доставки:</label>
+                    <input type="number" id="editDeliveryDays" min="0" required>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Сохранить
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="closeEditModal()">
+                        <i class="fas fa-times"></i> Отмена
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Подключение библиотек -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
