@@ -193,10 +193,21 @@ body {
     color: var(--white);
 }
 
+.btn-sm {
+    padding: 8px 15px;
+    font-size: 0.9rem;
+    border-radius: 8px;
+}
+
+.btn-sm i {
+    margin-right: 5px;
+    font-size: 0.9rem;
+}
+
 /* ========== Загрузка файлов ========== */
 .upload-section {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     gap: 30px;
     margin: 40px 0;
 }
@@ -307,31 +318,63 @@ body {
     margin: 20px 0;
     position: relative;
     -webkit-overflow-scrolling: touch;
+    /* ВАЖНО: Всегда показываем скроллбар */
+    overflow-x: scroll !important;
+    scrollbar-width: auto;
+    scrollbar-color: var(--primary-color) var(--border-color);
+    padding-bottom: 10px;
+    border: 1px solid var(--border-color);
+    /* Гарантируем видимость скроллбара */
+    min-height: 200px;
 }
 
-.table-container::after {
-    content: '';
-    position: absolute;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    width: 40px;
-    background: linear-gradient(to right, transparent, rgba(0,0,0,0.05));
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.3s;
+/* Стили для WebKit (Chrome, Safari, Edge) */
+.table-container::-webkit-scrollbar {
+    height: 16px !important;
+    background-color: var(--border-color) !important;
+    border-radius: 8px !important;
+    display: block !important;
+    -webkit-appearance: auto !important;
 }
 
-.table-container:hover::after,
-.table-container:active::after {
-    opacity: 1;
+.table-container::-webkit-scrollbar-thumb {
+    background-color: var(--primary-color) !important;
+    border-radius: 8px !important;
+    border: 2px solid var(--border-color) !important;
+    min-height: 40px;
+}
+
+.table-container::-webkit-scrollbar-thumb:hover {
+    background-color: var(--primary-dark) !important;
+}
+
+.table-container::-webkit-scrollbar-track {
+    background-color: var(--light-color) !important;
+    border-radius: 8px !important;
+}
+
+/* Для Firefox */
+.table-container {
+    scrollbar-width: auto !important;
+    scrollbar-color: var(--primary-color) var(--border-color) !important;
+}
+
+/* Для старых браузеров */
+.table-container {
+    -ms-overflow-style: auto !important;
 }
 
 .data-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.9rem;
-    min-width: 1400px;
+    /* ВАЖНО: Минимальная ширина для горизонтальной прокрутки */
+    min-width: 2000px; /* Увеличено для гарантии прокрутки */
+    margin-bottom: 5px;
+}
+
+.summary-table {
+    min-width: 1500px; /* Увеличено для гарантии прокрутки */
 }
 
 .data-table thead {
@@ -383,7 +426,11 @@ body {
 
 .data-table .success {
     background: #d1fae5;
-    color: var(--success-color);
+}
+
+.stat-number {
+    font-family: monospace;
+    text-align: right;
 }
 
 /* ========== Фильтры ========== */
@@ -393,13 +440,12 @@ body {
     border-radius: 12px;
     box-shadow: var(--shadow);
     margin: 20px 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
 }
 
 .filter-group {
-    margin-bottom: 15px;
-}
-
-.filter-group:last-child {
     margin-bottom: 0;
 }
 
@@ -529,263 +575,6 @@ body {
 .modal {
     display: none;
     position: fixed;
-    z-index: 2000;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.5);
-    animation: fadeIn 0.3s;
-}
-
-.modal-content {
-    background: var(--white);
-    margin: 5% auto;
-    padding: 30px;
-    border-radius: 12px;
-    width: 90%;
-    max-width: 500px;
-    position: relative;
-    animation: slideDown 0.3s;
-}
-
-@keyframes slideDown {
-    from {
-        transform: translateY(-50px);
-        opacity: 0;
-    }
-    to {
-        transform: translateY(0);
-        opacity: 1;
-    }
-}
-
-.close {
-    position: absolute;
-    right: 20px;
-    top: 20px;
-    font-size: 2rem;
-    font-weight: bold;
-    color: var(--text-secondary);
-    cursor: pointer;
-}
-
-.close:hover {
-    color: var(--danger-color);
-}
-
-.form-group {
-    margin-bottom: 20px;
-}
-
-.form-group label {
-    display: block;
-    margin-bottom: 8px;
-    font-weight: 500;
-    color: var(--text-primary);
-}
-
-.form-group input {
-    width: 100%;
-    padding: 12px;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    font-size: 1rem;
-}
-
-.form-group input:focus {
-    outline: none;
-    border-color: var(--primary-color);
-}
-
-.form-actions {
-    display: flex;
-    gap: 10px;
-    margin-top: 25px;
-}
-
-.form-actions .btn {
-    flex: 1;
-}
-
-/* ========== Бейджи ========== */
-.badge {
-    display: inline-block;
-    padding: 5px 10px;
-    border-radius: 20px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    white-space: nowrap;
-}
-
-.badge-urgent {
-    background: var(--danger-color);
-    color: var(--white);
-}
-
-.badge-warning {
-    background: var(--warning-color);
-    color: var(--white);
-}
-
-.badge-success {
-    background: var(--success-color);
-    color: var(--white);
-}
-
-/* ========== Пустые состояния ========== */
-.empty-state {
-    text-align: center;
-    padding: 60px 20px;
-    color: var(--text-secondary);
-}
-
-.empty-state i {
-    font-size: 4rem;
-    margin-bottom: 20px;
-    color: var(--border-color);
-}
-
-.empty-state h3 {
-    font-size: 1.5rem;
-    margin-bottom: 10px;
-    color: var(--text-primary);
-}
-
-/* ========== Утилиты ========== */
-.text-center {
-    text-align: center;
-}
-
-.mt-20 {
-    margin-top: 20px;
-}
-
-.mb-20 {
-    margin-bottom: 20px;
-}
-
-.loading {
-    text-align: center;
-    padding: 40px;
-    color: var(--text-secondary);
-}
-
-.loading i {
-    font-size: 3rem;
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
-}
-
-/* ========== Адаптивность ========== */
-@media (max-width: 992px) {
-    .upload-section {
-        grid-template-columns: 1fr;
-    }
-
-    .stats-section {
-        grid-template-columns: 1fr;
-    }
-}
-
-@media (max-width: 768px) {
-    .nav-menu {
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        background: var(--white);
-        flex-direction: column;
-        padding: 20px;
-        box-shadow: var(--shadow-lg);
-        display: none;
-    }
-
-    .nav-menu.active {
-        display: flex;
-    }
-
-    .nav-toggle {
-        display: block;
-    }
-
-    .page-header h1 {
-        font-size: 1.5rem;
-    }
-
-    .shipments-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .data-table {
-        min-width: 1200px;
-        font-size: 0.85rem;
-    }
-
-    .data-table th,
-    .data-table td {
-        padding: 10px 8px;
-    }
-
-    .table-container {
-        margin: 10px -10px;
-        width: calc(100% + 20px);
-        border-radius: 0;
-    }
-
-    .table-container::after {
-        opacity: 1;
-        width: 30px;
-    }
-
-    .filters-section {
-        padding: 15px;
-    }
-
-    .modal-content {
-        margin: 20% auto;
-        padding: 20px;
-    }
-}
-
-/* Подсказка прокрутки для мобильных */
-.scroll-hint {
-    display: none;
-}
-
-@media (max-width: 768px) {
-    .scroll-hint {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 5px;
-        margin: 5px 0;
-        font-size: 0.8rem;
-        color: var(--text-secondary);
-    }
-    
-    .scroll-hint i {
-        animation: slideLeft 1.5s infinite;
-    }
-}
-
-@keyframes slideLeft {
-    0% { transform: translateX(0); opacity: 0.5; }
-    50% { transform: translateX(-5px); opacity: 1; }
-    100% { transform: translateX(0); opacity: 0.5; }
-}
-/* Улучшенные стили для модального окна */
-.modal {
-    display: none;
-    position: fixed;
     z-index: 9999;
     left: 0;
     top: 0;
@@ -896,7 +685,7 @@ body {
     border-radius: 10px;
 }
 
-/* Стили для бейджей в таблице складов */
+/* ========== Бейджи ========== */
 .badge {
     display: inline-block;
     padding: 5px 12px;
@@ -922,14 +711,220 @@ body {
     color: white;
 }
 
-/* Улучшенные кнопки в таблице */
-.btn-sm {
-    padding: 8px 15px;
-    font-size: 0.9rem;
-    border-radius: 8px;
+.badge-factory {
+    background-color: var(--primary-color);
+    color: white;
 }
 
-.btn-sm i {
-    margin-right: 5px;
+.badge-edited {
+    background-color: var(--warning-color);
+    color: white;
+}
+
+.badge-default {
+    background-color: var(--text-secondary);
+    color: white;
+}
+
+/* Цветные даты запуска */
+.urgent-date {
+    color: var(--danger-color);
+    font-weight: bold;
+}
+
+.warning-date {
+    color: var(--warning-color);
+    font-weight: bold;
+}
+
+.normal-date {
+    color: var(--text-primary);
+}
+
+/* ========== Пустые состояния ========== */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-secondary);
+}
+
+.empty-state i {
+    font-size: 4rem;
+    margin-bottom: 20px;
+    color: var(--border-color);
+}
+
+.empty-state h3 {
+    font-size: 1.5rem;
+    margin-bottom: 10px;
+    color: var(--text-primary);
+}
+
+/* ========== Подсказка прокрутки ========== */
+.scroll-hint {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin: 10px 0;
+    padding: 8px 16px;
+    background: var(--primary-color);
+    color: white;
+    border-radius: 20px;
     font-size: 0.9rem;
+    animation: pulse 2s infinite;
+    transition: opacity 0.5s;
+    box-shadow: var(--shadow);
+}
+
+.scroll-hint i {
+    animation: slide 1.5s infinite;
+}
+
+@keyframes slide {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(5px); }
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.8; }
+    50% { opacity: 1; }
+}
+
+@media (max-width: 768px) {
+    .scroll-hint {
+        display: flex;
+    }
+}
+
+/* Индикатор прокрутки */
+.scroll-indicator {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 40px;
+    background: linear-gradient(to right, transparent, rgba(0,0,0,0.05));
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.table-container:hover .scroll-indicator,
+.table-container:active .scroll-indicator {
+    opacity: 1;
+}
+
+/* ========== Тестовые стили для отладки ========== */
+.debug-info {
+    background: #f0f0f0;
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 5px;
+    font-family: monospace;
+    font-size: 12px;
+}
+
+/* ========== Утилиты ========== */
+.text-center {
+    text-align: center;
+}
+
+.mt-20 {
+    margin-top: 20px;
+}
+
+.mb-20 {
+    margin-bottom: 20px;
+}
+
+.loading {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-secondary);
+}
+
+.loading i {
+    font-size: 3rem;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ========== Адаптивность ========== */
+@media (max-width: 992px) {
+    .upload-section {
+        grid-template-columns: 1fr;
+    }
+
+    .stats-section {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .nav-menu {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: var(--white);
+        flex-direction: column;
+        padding: 20px;
+        box-shadow: var(--shadow-lg);
+        display: none;
+    }
+
+    .nav-menu.active {
+        display: flex;
+    }
+
+    .nav-toggle {
+        display: block;
+    }
+
+    .page-header h1 {
+        font-size: 1.5rem;
+    }
+
+    .shipments-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .data-table {
+        min-width: 2000px;
+        font-size: 0.85rem;
+    }
+
+    .summary-table {
+        min-width: 1500px;
+    }
+
+    .data-table th,
+    .data-table td {
+        padding: 10px 8px;
+    }
+
+    .table-container {
+        margin: 10px -10px;
+        width: calc(100% + 20px);
+        border-radius: 0;
+    }
+
+    .filters-section {
+        grid-template-columns: 1fr;
+        padding: 15px;
+    }
+
+    .modal-content {
+        margin: 20% auto;
+        padding: 20px;
+    }
 }

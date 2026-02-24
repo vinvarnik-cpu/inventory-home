@@ -20,6 +20,7 @@
                 <li><a href="#" onclick="showPage('warehouses', event)"><i class="fas fa-warehouse"></i> Склады</a></li>
                 <li><a href="#" onclick="showPage('products', event)"><i class="fas fa-table"></i> Все товары</a></li>
                 <li><a href="#" onclick="showPage('shipments', event)"><i class="fas fa-clock"></i> Отгрузки</a></li>
+                <li><a href="#" onclick="showPage('summary', event)"><i class="fas fa-chart-pie"></i> Общая сводка</a></li>
             </ul>
             <button class="nav-toggle" onclick="toggleMenu()">
                 <i class="fas fa-bars"></i>
@@ -40,17 +41,31 @@
                     <div class="upload-icon">
                         <i class="fas fa-file-excel"></i>
                     </div>
-                    <h3>Загрузить файл</h3>
+                    <h3>Загрузить товары</h3>
                     <p>Поддерживаются форматы: Excel (.xlsx, .xls) и CSV (.csv)</p>
                     <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none">
                     <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
-                        <i class="fas fa-folder-open"></i> Выбрать файл
+                        <i class="fas fa-folder-open"></i> Выбрать файл с товарами
                     </button>
                     <div id="uploadStatus" class="upload-status"></div>
                 </div>
 
+                <div class="upload-card">
+                    <div class="upload-icon">
+                        <i class="fas fa-truck"></i>
+                    </div>
+                    <h3>Загрузить сроки доставки</h3>
+                    <p>Загрузите файл со столбцами: Склад, Дней доставки</p>
+                    <input type="file" id="deliveryFileInput" accept=".xlsx,.xls,.csv" style="display:none">
+                    <button class="btn btn-secondary" onclick="document.getElementById('deliveryFileInput').click()">
+                        <i class="fas fa-truck"></i> Выбрать файл со сроками
+                    </button>
+                    <div id="deliveryUploadStatus" class="upload-status"></div>
+                    <p class="mt-20"><small>💡 При загрузке обновятся дни доставки для всех складов</small></p>
+                </div>
+
                 <div class="info-card">
-                    <h3><i class="fas fa-info-circle"></i> Формат файла</h3>
+                    <h3><i class="fas fa-info-circle"></i> Формат файла товаров</h3>
                     <p>Файл должен содержать следующие столбцы:</p>
                     <ul>
                         <li><strong>Склад</strong> - название склада</li>
@@ -105,6 +120,7 @@
                             <tr>
                                 <th>Склад</th>
                                 <th>Дней доставки</th>
+                                <th>Источник</th>
                                 <th>Ожидаемая отгрузка (+12 дней)</th>
                                 <th>Действия</th>
                             </tr>
@@ -190,6 +206,60 @@
         </div>
     </div>
 
+    <!-- Страница: Общая сводка по товарам -->
+    <div id="summaryPage" class="page">
+        <div class="container-fluid">
+            <div class="page-header">
+                <h1><i class="fas fa-chart-pie"></i> Общая сводка по товарам</h1>
+                <p>Сводная информация по артикулам и размерам</p>
+            </div>
+
+            <div class="filters-section">
+                <div class="filter-group">
+                    <label><i class="fas fa-search"></i> Поиск:</label>
+                    <input type="text" id="summarySearchInput" placeholder="Артикул, наименование или бренд..." oninput="filterSummary()">
+                </div>
+                <div class="filter-group">
+                    <label><i class="fas fa-ruler"></i> Фильтр по размеру:</label>
+                    <select id="sizeFilter" onchange="filterSummary()">
+                        <option value="">Все размеры</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label><i class="fas fa-sort-amount-down"></i> Сортировка:</label>
+                    <select id="summarySort" onchange="filterSummary()">
+                        <option value="stock_asc">По остатку (сначала мало)</option>
+                        <option value="stock_desc">По остатку (сначала много)</option>
+                        <option value="name">По наименованию</option>
+                        <option value="urgent">По срочности</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="data-table summary-table" id="summaryTable">
+                    <thead>
+                        <tr>
+                            <th>Артикул продавца</th>
+                            <th>Наименование</th>
+                            <th>Размер</th>
+                            <th>Бренд</th>
+                            <th>Всего продано/мес</th>
+                            <th>Всего остаток</th>
+                            <th>Продажи/день</th>
+                            <th>Нужно на складе (45д)</th>
+                            <th>Самый ранний запуск</th>
+                            <th>Статус</th>
+                        </tr>
+                    </thead>
+                    <tbody id="summaryTableBody">
+                        <!-- Данные загружаются динамически -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <!-- Модальное окно для редактирования дней доставки -->
     <div id="editModal" class="modal">
         <div class="modal-content">
@@ -204,6 +274,11 @@
                 <div class="form-group">
                     <label>Дней доставки:</label>
                     <input type="number" id="editDeliveryDays" min="0" required>
+                </div>
+                <div class="form-group" id="factorySourceInfo" style="display:none">
+                    <label>Заводское значение:</label>
+                    <span id="factoryValue"></span>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="resetToFactory()">↺ Сбросить</button>
                 </div>
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">

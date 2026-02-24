@@ -1,6 +1,7 @@
 // ========== Глобальные переменные ==========
 let allProducts = [];
 let allWarehouses = [];
+let factoryDeliveryDays = {}; // Эталонные значения из файла
 let currentSortColumn = '';
 let currentSortDirection = 'asc';
 let currentWarehouseFilter = '';
@@ -8,24 +9,43 @@ let currentWarehouseFilter = '';
 // Ключи для localStorage
 const STORAGE_KEYS = {
     PRODUCTS: 'wb_products',
-    WAREHOUSES: 'wb_warehouses'
+    WAREHOUSES: 'wb_warehouses',
+    FACTORY: 'wb_factory_delivery_days'
 };
 
 // ========== Инициализация приложения ==========
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Приложение загружено');
+    console.log('🚀 Приложение загружено');
     
     // Загружаем данные из localStorage
     loadFromStorage();
+    loadFactorySettings();
     
-    // Обработчик загрузки файла
+    // Обработчик загрузки файла с товарами
     const fileInput = document.getElementById('fileInput');
     if (fileInput) {
-        fileInput.addEventListener('change', handleFileUpload);
+        fileInput.addEventListener('change', function(event) {
+            console.log('📁 Выбран файл с товарами');
+            handleFileUpload(event);
+        });
+    }
+    
+    // Обработчик загрузки файла со сроками доставки
+    const deliveryFileInput = document.getElementById('deliveryFileInput');
+    if (deliveryFileInput) {
+        deliveryFileInput.addEventListener('change', function(event) {
+            console.log('📁 Выбран файл со сроками доставки');
+            handleDeliveryFileUpload(event);
+        });
     }
     
     // Устанавливаем активную ссылку в меню
     setActiveNavLink('upload');
+    
+    // Активируем скроллбары
+    setTimeout(() => {
+        forceHorizontalScroll();
+    }, 500);
 });
 
 // ========== НАВИГАЦИЯ ==========
@@ -34,7 +54,8 @@ function setActiveNavLink(pageName) {
         link.classList.remove('active');
         if (link.textContent.includes(pageName === 'upload' ? 'Загрузка' :
                                       pageName === 'warehouses' ? 'Склады' :
-                                      pageName === 'products' ? 'Все товары' : 'Отгрузки')) {
+                                      pageName === 'products' ? 'Все товары' :
+                                      pageName === 'shipments' ? 'Отгрузки' : 'Общая сводка')) {
             link.classList.add('active');
         }
     });
@@ -53,7 +74,8 @@ function showPage(pageName, event) {
         'upload': 'uploadPage',
         'warehouses': 'warehousesPage',
         'products': 'productsPage',
-        'shipments': 'shipmentsPage'
+        'shipments': 'shipmentsPage',
+        'summary': 'summaryPage'
     };
     
     const targetPage = document.getElementById(pageMap[pageName]);
@@ -75,6 +97,8 @@ function showPage(pageName, event) {
         displayProducts();
     } else if (pageName === 'shipments') {
         loadShipments();
+    } else if (pageName === 'summary') {
+        displaySummary();
     }
 }
 
@@ -86,14 +110,11 @@ function toggleMenu() {
 }
 
 // ========== РАБОТА С LOCALSTORAGE ==========
-// ВАЖНО: эти функции должны быть объявлены ДО того, как их вызывают!
-
 function saveWarehousesToStorage() {
     try {
         console.log('💾 Сохраняем склады в localStorage');
-        // Сохраняем склады без лишних полей
-        const warehousesToSave = allWarehouses.map(({ id, name, delivery_days }) => ({
-            id, name, delivery_days
+        const warehousesToSave = allWarehouses.map(({ id, name, delivery_days, source }) => ({
+            id, name, delivery_days, source: source || 'default'
         }));
         localStorage.setItem(STORAGE_KEYS.WAREHOUSES, JSON.stringify(warehousesToSave));
         console.log(`✅ Склады сохранены: ${warehousesToSave.length} шт.`);
@@ -105,7 +126,6 @@ function saveWarehousesToStorage() {
 function saveProductsToStorage() {
     try {
         console.log('💾 Сохраняем товары в localStorage');
-        // Сохраняем товары только с исходными данными (без расчетных полей)
         const productsToSave = allProducts.map(({ 
             id, warehouse, seller_article, size, name, brand, sold, stock 
         }) => ({
@@ -118,22 +138,60 @@ function saveProductsToStorage() {
     }
 }
 
+function saveFactorySettings(warehouses) {
+    try {
+        factoryDeliveryDays = {};
+        warehouses.forEach(w => {
+            if (w.name && w.delivery_days) {
+                factoryDeliveryDays[w.name] = w.delivery_days;
+            }
+        });
+        localStorage.setItem(STORAGE_KEYS.FACTORY, JSON.stringify(factoryDeliveryDays));
+        console.log('✅ Заводские настройки сохранены');
+    } catch (e) {
+        console.error('❌ Ошибка сохранения заводских настроек:', e);
+    }
+}
+
+function loadFactorySettings() {
+    try {
+        const saved = localStorage.getItem(STORAGE_KEYS.FACTORY);
+        if (saved) {
+            factoryDeliveryDays = JSON.parse(saved);
+            console.log('📂 Заводские настройки загружены');
+        }
+    } catch (e) {
+        console.error('❌ Ошибка загрузки заводских настроек:', e);
+        factoryDeliveryDays = {};
+    }
+}
+
 function loadFromStorage() {
     try {
         console.log('📂 Загрузка данных из localStorage');
         
         // Загружаем склады
         const savedWarehouses = localStorage.getItem(STORAGE_KEYS.WAREHOUSES);
-        allWarehouses = savedWarehouses ? JSON.parse(savedWarehouses) : [];
+        if (savedWarehouses) {
+            allWarehouses = JSON.parse(savedWarehouses);
+            console.log(`📦 Загружено складов: ${allWarehouses.length}`);
+        } else {
+            allWarehouses = [];
+        }
         
         // Загружаем товары
         const savedProducts = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
-        allProducts = savedProducts ? JSON.parse(savedProducts) : [];
-        
-        console.log(`📊 Загружено складов: ${allWarehouses.length}, товаров: ${allProducts.length}`);
+        if (savedProducts) {
+            allProducts = JSON.parse(savedProducts);
+            console.log(`📦 Загружено товаров: ${allProducts.length}`);
+        } else {
+            allProducts = [];
+        }
         
         // Добавляем рассчитанные поля к товарам
-        allProducts = allProducts.map(product => calculateProductFields(product));
+        if (allProducts.length > 0) {
+            allProducts = allProducts.map(product => calculateProductFields(product));
+        }
         
         // Обновляем интерфейс
         displayWarehouses();
@@ -142,6 +200,13 @@ function loadFromStorage() {
         updateArticleFilter();
         updateStats();
         loadShipments();
+        updateSizeFilter();
+        displaySummary();
+        
+        // Активируем скроллбары после загрузки
+        setTimeout(() => {
+            forceHorizontalScroll();
+        }, 500);
         
     } catch (e) {
         console.error('❌ Ошибка загрузки из localStorage:', e);
@@ -218,10 +283,15 @@ function formatDate(date) {
     return `${day}.${month}.${year}`;
 }
 
-// ========== ЗАГРУЗКА ФАЙЛОВ ==========
+// ========== ЗАГРУЗКА ФАЙЛА С ТОВАРАМИ ==========
 async function handleFileUpload(event) {
     const file = event.target.files[0];
-    if (!file) return;
+    if (!file) {
+        console.log('❌ Файл не выбран');
+        return;
+    }
+    
+    console.log('📁 Загружается файл:', file.name, 'размер:', file.size, 'байт');
     
     const statusDiv = document.getElementById('uploadStatus');
     statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Загрузка и обработка файла...';
@@ -230,6 +300,12 @@ async function handleFileUpload(event) {
     
     try {
         const data = await readFile(file);
+        console.log('📊 Прочитано записей:', data.length);
+        
+        if (data.length === 0) {
+            throw new Error('Файл не содержит данных');
+        }
+        
         await processData(data);
         
         statusDiv.className = 'upload-status success';
@@ -238,16 +314,203 @@ async function handleFileUpload(event) {
         // Обновить все фильтры и отображение
         updateWarehouseFilter();
         updateArticleFilter();
+        updateSizeFilter();
         displayWarehouses();
         displayProducts();
         loadShipments();
+        displaySummary();
         updateStats();
         
+        // Очищаем input для возможности повторной загрузки того же файла
+        event.target.value = '';
+        
+        // Активируем скроллбары
+        setTimeout(() => {
+            forceHorizontalScroll();
+        }, 500);
+        
     } catch (error) {
+        console.error('❌ Ошибка загрузки файла:', error);
         statusDiv.className = 'upload-status error';
         statusDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> Ошибка: ' + error.message;
-        console.error('❌ Ошибка загрузки файла:', error);
+        
+        // Очищаем input
+        event.target.value = '';
     }
+}
+
+// ========== ЗАГРУЗКА ФАЙЛА СО СРОКАМИ ДОСТАВКИ ==========
+async function handleDeliveryFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file) {
+        console.log('❌ Файл не выбран');
+        return;
+    }
+    
+    console.log('📁 Загружается файл со сроками:', file.name, 'размер:', file.size, 'байт');
+    
+    const statusDiv = document.getElementById('deliveryUploadStatus');
+    statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Загрузка сроков доставки...';
+    statusDiv.className = 'upload-status';
+    statusDiv.style.display = 'block';
+    
+    try {
+        const data = await readDeliveryFile(file);
+        console.log('📊 Прочитано сроков доставки:', data.length);
+        
+        if (data.length === 0) {
+            throw new Error('Не найдено данных о сроках доставки');
+        }
+        
+        await processDeliveryData(data);
+        
+        statusDiv.className = 'upload-status success';
+        statusDiv.innerHTML = '<i class="fas fa-check-circle"></i> Сроки доставки успешно загружены!';
+        
+        // Обновить отображение
+        displayWarehouses();
+        displayProducts();
+        loadShipments();
+        displaySummary();
+        
+        // Очищаем input для возможности повторной загрузки того же файла
+        event.target.value = '';
+        
+        // Активируем скроллбары
+        setTimeout(() => {
+            forceHorizontalScroll();
+        }, 500);
+        
+    } catch (error) {
+        console.error('❌ Ошибка загрузки сроков доставки:', error);
+        statusDiv.className = 'upload-status error';
+        statusDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> Ошибка: ' + error.message;
+        
+        // Очищаем input
+        event.target.value = '';
+    }
+}
+
+function readDeliveryFile(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        
+        reader.onload = function(e) {
+            try {
+                console.log('📖 Чтение файла со сроками...');
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                
+                console.log('📑 Листы в файле:', workbook.SheetNames);
+                
+                // Ищем лист "СправочникДоставки"
+                let sheetName = 'СправочникДоставки';
+                if (!workbook.SheetNames.includes(sheetName)) {
+                    // Если нет, берем второй лист (индекс 1) или первый
+                    sheetName = workbook.SheetNames[1] || workbook.SheetNames[0];
+                    console.log('📑 Используем лист:', sheetName);
+                }
+                
+                const worksheet = workbook.Sheets[sheetName];
+                
+                // Преобразуем в JSON
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
+                    header: 1,
+                    defval: '',
+                    blankrows: false
+                });
+                
+                console.log('📊 Первые 5 строк:', jsonData.slice(0, 5));
+                
+                // Пропускаем заголовок (первая строка)
+                const result = [];
+                for (let i = 1; i < jsonData.length; i++) {
+                    const row = jsonData[i];
+                    if (row && row.length >= 2 && row[0] && row[1] !== undefined) {
+                        // Первый столбец - склад, второй - дней доставки
+                        const warehouse = String(row[0]).trim();
+                        const days = Number(row[1]);
+                        
+                        if (warehouse && !isNaN(days) && days > 0) {
+                            result.push({
+                                warehouse: warehouse,
+                                delivery_days: days
+                            });
+                        }
+                    }
+                }
+                
+                console.log(`📦 Загружено сроков доставки: ${result.length} шт.`);
+                resolve(result);
+            } catch (error) {
+                console.error('❌ Ошибка парсинга файла:', error);
+                reject(new Error('Не удалось прочитать файл со сроками: ' + error.message));
+            }
+        };
+        
+        reader.onerror = function(error) {
+            console.error('❌ Ошибка чтения файла:', error);
+            reject(new Error('Ошибка чтения файла'));
+        };
+        
+        reader.readAsArrayBuffer(file);
+    });
+}
+
+async function processDeliveryData(data) {
+    console.log('🔄 Обрабатываем сроки доставки:', data);
+    
+    let updatedCount = 0;
+    let createdCount = 0;
+    
+    data.forEach(item => {
+        const warehouseName = item.warehouse;
+        const deliveryDays = Number(item.delivery_days);
+        
+        if (!warehouseName || isNaN(deliveryDays) || deliveryDays <= 0) return;
+        
+        // Ищем существующий склад
+        const existingWarehouse = allWarehouses.find(w => w.name === warehouseName);
+        
+        if (existingWarehouse) {
+            // Обновляем существующий склад
+            existingWarehouse.delivery_days = deliveryDays;
+            existingWarehouse.source = 'factory';
+            updatedCount++;
+        } else {
+            // Создаем новый склад
+            allWarehouses.push({
+                id: generateId(),
+                name: warehouseName,
+                delivery_days: deliveryDays,
+                source: 'factory'
+            });
+            createdCount++;
+        }
+    });
+    
+    // Сохраняем эталонные значения
+    const factoryData = {};
+    data.forEach(item => {
+        if (item.warehouse && item.delivery_days) {
+            factoryData[item.warehouse] = item.delivery_days;
+        }
+    });
+    
+    // Обновляем глобальный объект
+    Object.assign(factoryDeliveryDays, factoryData);
+    localStorage.setItem(STORAGE_KEYS.FACTORY, JSON.stringify(factoryDeliveryDays));
+    
+    // Сохраняем склады
+    saveWarehousesToStorage();
+    
+    // Пересчитываем все товары
+    if (allProducts.length > 0) {
+        allProducts = allProducts.map(product => calculateProductFields(product));
+        saveProductsToStorage();
+    }
+    
+    console.log(`✅ Склады обновлены: создано ${createdCount}, обновлено ${updatedCount}`);
 }
 
 function readFile(file) {
@@ -256,13 +519,17 @@ function readFile(file) {
         
         reader.onload = function(e) {
             try {
+                console.log('📖 Чтение файла с товарами...');
                 const data = new Uint8Array(e.target.result);
                 const workbook = XLSX.read(data, { type: 'array' });
+                
+                console.log('📑 Листы в файле:', workbook.SheetNames);
                 
                 // Ищем лист с исходными данными
                 let sheetName = 'Исходные';
                 if (!workbook.SheetNames.includes(sheetName)) {
                     sheetName = workbook.SheetNames[0];
+                    console.log('📑 Используем лист:', sheetName);
                 }
                 
                 const worksheet = workbook.Sheets[sheetName];
@@ -274,15 +541,18 @@ function readFile(file) {
                     blankrows: false
                 });
                 
+                console.log('📊 Первые 5 строк:', jsonData.slice(0, 5));
+                
                 // Пропускаем первые 2 строки (шапка отчета)
                 const dataRows = jsonData.slice(2);
                 
                 // Заголовки из второй строки
                 const headers = jsonData[1] || [];
+                console.log('📋 Заголовки:', headers);
                 
                 // Преобразуем в объекты
                 const result = [];
-                dataRows.forEach(row => {
+                dataRows.forEach((row, rowIndex) => {
                     if (!row || row.length === 0) return;
                     
                     const obj = {};
@@ -318,13 +588,16 @@ function readFile(file) {
                     }
                 });
                 
+                console.log(`✅ Прочитано записей: ${result.length}`);
                 resolve(result);
             } catch (error) {
+                console.error('❌ Ошибка парсинга файла:', error);
                 reject(new Error('Не удалось прочитать файл: ' + error.message));
             }
         };
         
-        reader.onerror = function() {
+        reader.onerror = function(error) {
+            console.error('❌ Ошибка чтения файла:', error);
             reject(new Error('Ошибка чтения файла'));
         };
         
@@ -345,19 +618,29 @@ async function processData(data) {
     data.forEach(row => {
         const warehouseName = row.warehouse || '';
         if (warehouseName && !warehousesMap.has(warehouseName)) {
+            // Проверяем, есть ли заводское значение
+            const factoryDays = factoryDeliveryDays[warehouseName];
             warehousesMap.set(warehouseName, {
                 id: generateId(),
                 name: warehouseName,
-                delivery_days: 7 // Дефолтное значение
+                delivery_days: factoryDays || 7,
+                source: factoryDays ? 'factory' : 'default'
             });
         }
     });
     
-    // Сохраняем склады
-    allWarehouses = Array.from(warehousesMap.values());
-    saveWarehousesToStorage(); // ← вот здесь вызывается функция
+    // Сохраняем склады (существующие не перезаписываем, только новые)
+    const existingWarehouseNames = new Set(allWarehouses.map(w => w.name));
     
-    console.log('✅ Созданы склады:', allWarehouses.length);
+    Array.from(warehousesMap.values()).forEach(newWarehouse => {
+        if (!existingWarehouseNames.has(newWarehouse.name)) {
+            allWarehouses.push(newWarehouse);
+        }
+    });
+    
+    saveWarehousesToStorage();
+    
+    console.log('✅ Склады актуализированы:', allWarehouses.length);
     
     // Создаем товары
     const newProducts = [];
@@ -378,7 +661,7 @@ async function processData(data) {
     });
     
     allProducts = newProducts;
-    saveProductsToStorage(); // ← и здесь тоже
+    saveProductsToStorage();
     
     console.log('✅ Созданы товары:', allProducts.length);
 }
@@ -391,7 +674,7 @@ function displayWarehouses() {
     if (allWarehouses.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="4" class="empty-state">
+                <td colspan="5" class="empty-state">
                     <i class="fas fa-inbox"></i>
                     <h3>Нет данных</h3>
                     <p>Загрузите файл с данными на главной странице</p>
@@ -409,6 +692,21 @@ function displayWarehouses() {
     const today = new Date();
     
     tbody.innerHTML = sortedWarehouses.map(warehouse => {
+        // Определяем источник
+        let sourceBadge = '';
+        let sourceText = '';
+        
+        if (warehouse.source === 'factory') {
+            sourceBadge = 'badge-factory';
+            sourceText = '📁 Из файла';
+        } else if (warehouse.source === 'edited') {
+            sourceBadge = 'badge-edited';
+            sourceText = '✏️ Изменено';
+        } else {
+            sourceBadge = 'badge-default';
+            sourceText = '⚙️ По умолчанию';
+        }
+        
         // Рассчитываем дату отгрузки (+12 дней от сегодня с учетом доставки)
         const shipmentDate = new Date(today);
         shipmentDate.setDate(shipmentDate.getDate() + warehouse.delivery_days + 12);
@@ -422,6 +720,7 @@ function displayWarehouses() {
                         ${warehouse.delivery_days} дн.
                     </span>
                 </td>
+                <td><span class="badge ${sourceBadge}">${sourceText}</span></td>
                 <td><span class="badge badge-success">${formatDate(shipmentDate)}</span></td>
                 <td>
                     <button class="btn btn-primary btn-sm" onclick="editWarehouse('${warehouse.id}')">
@@ -530,6 +829,14 @@ function displayProducts() {
     
     // Обновляем счетчик результатов
     updateResultsCount(filteredProducts.length, allProducts.length);
+    
+    // Показываем подсказку прокрутки
+    showScrollHint('productsTable');
+    
+    // Обновляем скроллбары
+    setTimeout(() => {
+        forceHorizontalScroll();
+    }, 200);
 }
 
 function updateResultsCount(filtered, total) {
@@ -605,6 +912,30 @@ function updateArticleFilter() {
     
     select.innerHTML = options;
     console.log('🔽 Фильтр артикулов обновлен:', articles.length, 'артикулов');
+}
+
+function updateSizeFilter() {
+    const select = document.getElementById('sizeFilter');
+    if (!select) return;
+    
+    if (!allProducts || allProducts.length === 0) {
+        select.innerHTML = '<option value="">Нет размеров</option>';
+        return;
+    }
+    
+    // Получаем уникальные размеры
+    const sizes = [...new Set(allProducts.map(p => p.size))].filter(s => s && s !== '');
+    
+    // Сортируем
+    sizes.sort((a, b) => a.localeCompare(b, 'ru', { numeric: true }));
+    
+    let options = '<option value="">Все размеры</option>';
+    sizes.forEach(size => {
+        options += `<option value="${size}">${size}</option>`;
+    });
+    
+    select.innerHTML = options;
+    console.log('🔽 Фильтр размеров обновлен:', sizes.length, 'размеров');
 }
 
 function filterProducts() {
@@ -704,7 +1035,8 @@ function loadShipments() {
                 urgentCount: 0,
                 totalProducts: 0,
                 shipmentDate: null,
-                shipmentDateStr: ''
+                shipmentDateStr: '',
+                deliveryDays: product.delivery_days || 7
             };
         }
         
@@ -721,28 +1053,22 @@ function loadShipments() {
         }
     });
     
-    // Для каждого склада рассчитываем дату отгрузки (+12 дней от ближайшей сборки)
+    // Для каждого склада рассчитываем дату отгрузки (+12 дней от СЕГОДНЯ, а не от сборки)
     Object.values(warehouseShipments).forEach(shipment => {
-        if (shipment.earliestDate && shipment.earliestDateStr !== 'СРОЧНО!') {
-            // Создаем дату отгрузки (ближайшая дата сборки + 12 дней)
-            const shipDate = new Date(shipment.earliestDate);
-            shipDate.setDate(shipDate.getDate() + 12);
-            shipment.shipmentDate = shipDate;
-            shipment.shipmentDateStr = formatDate(shipDate);
-            
-            // Проверяем, не просрочена ли отгрузка
-            if (shipDate < today) {
-                shipment.shipmentStatus = 'overdue';
-                shipment.daysToShip = 0;
-            } else {
-                const daysToShip = Math.ceil((shipDate - today) / (1000 * 60 * 60 * 24));
-                shipment.shipmentStatus = daysToShip <= 3 ? 'urgent' : 'normal';
-                shipment.daysToShip = daysToShip;
-            }
-        } else if (shipment.earliestDateStr === 'СРОЧНО!') {
-            shipment.shipmentDateStr = 'СРОЧНО!';
-            shipment.shipmentStatus = 'urgent';
+        // ИСПРАВЛЕНО: Дата отгрузки = Сегодня + Дни доставки + 12 дней
+        const shipDate = new Date(today);
+        shipDate.setDate(shipDate.getDate() + shipment.deliveryDays + 12);
+        shipment.shipmentDate = shipDate;
+        shipment.shipmentDateStr = formatDate(shipDate);
+        
+        // Проверяем, не просрочена ли отгрузка
+        if (shipDate < today) {
+            shipment.shipmentStatus = 'overdue';
             shipment.daysToShip = 0;
+        } else {
+            const daysToShip = Math.ceil((shipDate - today) / (1000 * 60 * 60 * 24));
+            shipment.shipmentStatus = daysToShip <= 3 ? 'urgent' : 'normal';
+            shipment.daysToShip = daysToShip;
         }
     });
     
@@ -813,6 +1139,304 @@ function loadShipments() {
     }).join('');
 }
 
+// ========== ОБЩАЯ СВОДКА ==========
+function generateSummaryData() {
+    if (!allProducts.length) return [];
+    
+    const groups = {};
+    
+    allProducts.forEach(product => {
+        const key = `${product.seller_article}_${product.size}`;
+        
+        if (!groups[key]) {
+            groups[key] = {
+                seller_article: product.seller_article,
+                name: product.name,
+                size: product.size,
+                brand: product.brand,
+                totalSold: 0,
+                totalStock: 0,
+                minDaysToZero: Infinity,
+                earliestAssembly: null,
+                earliestAssemblyStr: '',
+                hasUrgent: false,
+                products: []
+            };
+        }
+        
+        groups[key].totalSold += product.sold;
+        groups[key].totalStock += product.stock;
+        groups[key].products.push(product);
+        
+        if (product.is_urgent) {
+            groups[key].hasUrgent = true;
+        }
+        
+        if (product.days_to_zero < groups[key].minDaysToZero) {
+            groups[key].minDaysToZero = product.days_to_zero;
+        }
+        
+        if (product.assembly_date && 
+            (!groups[key].earliestAssembly || product.assembly_date < groups[key].earliestAssembly)) {
+            groups[key].earliestAssembly = product.assembly_date;
+            groups[key].earliestAssemblyStr = product.assembly_start;
+        }
+    });
+    
+    return Object.values(groups).map(group => {
+        const salesPerDay = group.totalSold / 30;
+        const needed45 = Math.ceil(salesPerDay * 45);
+        
+        // Определяем статус
+        let status = 'Нормально';
+        let statusClass = 'badge-success';
+        
+        if (group.hasUrgent) {
+            status = 'Критично';
+            statusClass = 'badge-urgent';
+        } else if (group.minDaysToZero < 14) {
+            status = 'Внимание';
+            statusClass = 'badge-warning';
+        }
+        
+        // Определяем класс строки по остатку
+        let rowClass = '';
+        const coverageDays = group.totalStock / salesPerDay;
+        if (coverageDays < 14) {
+            rowClass = 'urgent';
+        } else if (coverageDays < 30) {
+            rowClass = 'warning';
+        } else {
+            rowClass = 'success';
+        }
+        
+        return {
+            ...group,
+            salesPerDay: salesPerDay.toFixed(2),
+            needed45: needed45,
+            salesPerDayNum: salesPerDay,
+            coverageDays: coverageDays,
+            status: status,
+            statusClass: statusClass,
+            rowClass: rowClass
+        };
+    });
+}
+
+function displaySummary() {
+    const tbody = document.getElementById('summaryTableBody');
+    if (!tbody) return;
+    
+    if (allProducts.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="10" class="empty-state">
+                    <i class="fas fa-inbox"></i>
+                    <h3>Нет данных</h3>
+                    <p>Загрузите файл с данными на главной странице</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    let summaryData = generateSummaryData();
+    
+    // Применяем фильтры
+    const searchTerm = document.getElementById('summarySearchInput')?.value?.toLowerCase() || '';
+    const sizeFilter = document.getElementById('sizeFilter')?.value || '';
+    const sortOption = document.getElementById('summarySort')?.value || 'stock_asc';
+    
+    if (searchTerm) {
+        summaryData = summaryData.filter(item => 
+            item.seller_article?.toLowerCase().includes(searchTerm) ||
+            item.name?.toLowerCase().includes(searchTerm) ||
+            item.brand?.toLowerCase().includes(searchTerm)
+        );
+    }
+    
+    if (sizeFilter) {
+        summaryData = summaryData.filter(item => item.size === sizeFilter);
+    }
+    
+    // Сортировка
+    summaryData.sort((a, b) => {
+        switch (sortOption) {
+            case 'stock_asc':
+                return a.totalStock - b.totalStock;
+            case 'stock_desc':
+                return b.totalStock - a.totalStock;
+            case 'name':
+                return (a.name || '').localeCompare(b.name || '');
+            case 'urgent':
+                if (a.hasUrgent && !b.hasUrgent) return -1;
+                if (!a.hasUrgent && b.hasUrgent) return 1;
+                return (a.minDaysToZero || 999) - (b.minDaysToZero || 999);
+            default:
+                return 0;
+        }
+    });
+    
+    tbody.innerHTML = summaryData.map(item => {
+        // Определяем цвет даты запуска
+        let dateClass = 'normal-date';
+        if (item.earliestAssemblyStr === 'СРОЧНО!') {
+            dateClass = 'urgent-date';
+        } else if (item.earliestAssembly) {
+            const daysDiff = Math.ceil((item.earliestAssembly - new Date()) / (1000 * 60 * 60 * 24));
+            if (daysDiff < 0) {
+                dateClass = 'urgent-date';
+            } else if (daysDiff < 14) {
+                dateClass = 'warning-date';
+            }
+        }
+        
+        return `
+            <tr class="${item.rowClass}" onclick="filterByArticle('${item.seller_article}')" style="cursor: pointer;">
+                <td><strong>${item.seller_article || ''}</strong></td>
+                <td>${item.name || ''}</td>
+                <td>${item.size || ''}</td>
+                <td>${item.brand || ''}</td>
+                <td class="stat-number">${item.totalSold}</td>
+                <td class="stat-number"><strong>${item.totalStock}</strong></td>
+                <td class="stat-number">${item.salesPerDay}</td>
+                <td class="stat-number">${item.needed45}</td>
+                <td class="${dateClass}">${item.earliestAssemblyStr || ''}</td>
+                <td><span class="badge ${item.statusClass}">${item.status}</span></td>
+            </tr>
+        `;
+    }).join('');
+    
+    updateSummaryResultsCount(summaryData.length);
+    
+    // Показываем подсказку прокрутки
+    showScrollHint('summaryTable');
+    
+    // Обновляем скроллбары
+    setTimeout(() => {
+        forceHorizontalScroll();
+    }, 200);
+}
+
+function updateSummaryResultsCount(count) {
+    let counter = document.getElementById('summaryResultsCounter');
+    if (!counter) {
+        counter = document.createElement('div');
+        counter.id = 'summaryResultsCounter';
+        counter.className = 'results-counter';
+        const filtersSection = document.querySelector('.filters-section');
+        if (filtersSection) {
+            filtersSection.appendChild(counter);
+        }
+    }
+    counter.innerHTML = `<i class="fas fa-box"></i> Всего позиций: ${count}`;
+}
+
+function filterSummary() {
+    displaySummary();
+}
+
+function filterByArticle(article) {
+    if (!article) return;
+    
+    // Устанавливаем фильтр по артикулу на странице товаров
+    const articleFilter = document.getElementById('articleFilter');
+    if (articleFilter) {
+        articleFilter.value = article;
+    }
+    
+    // Очищаем фильтр по складу
+    const warehouseFilter = document.getElementById('warehouseFilter');
+    if (warehouseFilter) {
+        warehouseFilter.value = '';
+    }
+    
+    // Переходим на страницу товаров
+    showPage('products');
+    displayProducts();
+}
+
+// ========== ПОДСКАЗКА ПРОКРУТКИ ==========
+function showScrollHint(tableId) {
+    const table = document.getElementById(tableId);
+    if (!table) return;
+    
+    const container = table.closest('.table-container');
+    if (!container) return;
+    
+    // Проверяем, нужна ли прокрутка
+    if (table.scrollWidth <= container.clientWidth) return;
+    
+    // Удаляем старую подсказку если есть
+    const oldHint = container.parentNode.querySelector('.scroll-hint');
+    if (oldHint) oldHint.remove();
+    
+    // Создаем новую подсказку
+    const hint = document.createElement('div');
+    hint.className = 'scroll-hint';
+    hint.innerHTML = `
+        <i class="fas fa-arrow-left"></i>
+        <span>Прокрутите → для просмотра всех колонок</span>
+        <i class="fas fa-arrow-right"></i>
+    `;
+    
+    // Вставляем после контейнера
+    container.parentNode.insertBefore(hint, container.nextSibling);
+    
+    // Показываем подсказку
+    hint.style.display = 'flex';
+    
+    // Добавляем обработчик прокрутки для скрытия подсказки
+    const hideHint = () => {
+        hint.style.opacity = '0';
+        setTimeout(() => {
+            hint.style.display = 'none';
+            container.removeEventListener('scroll', hideHint);
+        }, 500);
+    };
+    
+    container.addEventListener('scroll', hideHint, { once: true });
+    
+    // Автоматически скрываем через 5 секунд
+    setTimeout(() => {
+        if (hint.style.display !== 'none') {
+            hint.style.opacity = '0';
+            setTimeout(() => {
+                hint.style.display = 'none';
+            }, 500);
+        }
+    }, 5000);
+}
+
+// ========== ПРИНУДИТЕЛЬНОЕ ОТОБРАЖЕНИЕ СКРОЛЛБАРА ==========
+function forceHorizontalScroll() {
+    console.log('🔄 Принудительная активация скроллбаров...');
+    
+    const tables = [
+        { id: 'productsTable', minWidth: '2000px' },
+        { id: 'summaryTable', minWidth: '1500px' }
+    ];
+    
+    tables.forEach(table => {
+        const tableElement = document.getElementById(table.id);
+        if (!tableElement) return;
+        
+        const container = tableElement.closest('.table-container');
+        if (!container) return;
+        
+        // Принудительно устанавливаем минимальную ширину
+        tableElement.style.minWidth = table.minWidth;
+        tableElement.style.width = '100%';
+        
+        // Принудительно включаем скролл
+        container.style.overflowX = 'scroll';
+        container.style.overflowY = 'hidden';
+        container.style.webkitOverflowScrolling = 'touch';
+        
+        console.log(`✅ Скроллбар для ${table.id} активирован: ${tableElement.scrollWidth}px > ${container.clientWidth}px`);
+    });
+}
+
 // ========== РЕДАКТИРОВАНИЕ СКЛАДОВ ==========
 function editWarehouse(warehouseId) {
     console.log('🖱️ Нажата кнопка редактирования склада с ID:', warehouseId);
@@ -832,11 +1456,21 @@ function editWarehouse(warehouseId) {
     const idField = document.getElementById('editWarehouseId');
     const nameField = document.getElementById('editWarehouseName');
     const daysField = document.getElementById('editDeliveryDays');
+    const factoryInfo = document.getElementById('factorySourceInfo');
+    const factoryValue = document.getElementById('factoryValue');
     
     if (idField && nameField && daysField) {
         idField.value = warehouse.id;
         nameField.value = warehouse.name;
         daysField.value = warehouse.delivery_days;
+        
+        // Показываем заводское значение если есть
+        if (factoryDeliveryDays[warehouse.name]) {
+            factoryInfo.style.display = 'block';
+            factoryValue.textContent = factoryDeliveryDays[warehouse.name] + ' дн.';
+        } else {
+            factoryInfo.style.display = 'none';
+        }
         
         console.log('📝 Поля заполнены:', {
             id: idField.value,
@@ -858,6 +1492,16 @@ function editWarehouse(warehouseId) {
             nameField: !!nameField,
             daysField: !!daysField
         });
+    }
+}
+
+function resetToFactory() {
+    const id = document.getElementById('editWarehouseId')?.value;
+    const warehouse = allWarehouses.find(w => w.id === id);
+    
+    if (warehouse && factoryDeliveryDays[warehouse.name]) {
+        document.getElementById('editDeliveryDays').value = factoryDeliveryDays[warehouse.name];
+        alert(`✅ Значение сброшено к заводскому: ${factoryDeliveryDays[warehouse.name]} дн.`);
     }
 }
 
@@ -905,6 +1549,7 @@ function saveWarehouse(event) {
     
     // Обновляем склад
     allWarehouses[warehouseIndex].delivery_days = deliveryDays;
+    allWarehouses[warehouseIndex].source = 'edited'; // Помечаем как измененное вручную
     
     console.log(`✅ Склад обновлен: ${name}, дни доставки: ${oldDeliveryDays} → ${deliveryDays}`);
     
@@ -932,6 +1577,7 @@ function saveWarehouse(event) {
     displayWarehouses();
     displayProducts();
     loadShipments();
+    displaySummary();
     updateWarehouseFilter();
     updateArticleFilter();
     
