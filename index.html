@@ -70,6 +70,7 @@
                     <ul>
                         <li><strong>Склад</strong> - название склада</li>
                         <li><strong>Артикул продавца</strong> - артикул товара</li>
+                        <li><strong>Баркод / Штрихкод</strong> - штрихкод товара</li>
                         <li><strong>Размер</strong> - размер товара</li>
                         <li><strong>Наименование</strong> - название товара</li>
                         <li><strong>Бренд</strong> - бренд товара</li>
@@ -139,9 +140,17 @@
         <div class="container-fluid">
             <div class="page-header">
                 <h1 id="productsPageTitle"><i class="fas fa-table"></i> Все товары</h1>
-                <button id="backButton" class="btn btn-secondary" onclick="clearWarehouseFilter()" style="display:none">
-                    <i class="fas fa-arrow-left"></i> Назад ко всем складам
-                </button>
+                <div style="display: flex; gap: 10px; justify-content: center;">
+                    <button id="backButton" class="btn btn-secondary" onclick="clearWarehouseFilter()" style="display:none">
+                        <i class="fas fa-arrow-left"></i> Назад ко всем складам
+                    </button>
+                    <button id="exportButton" class="btn btn-success" onclick="exportToExcel()" style="display:none">
+                        <i class="fas fa-file-excel"></i> Выгрузить отчет (XLSX)
+                    </button>
+                    <button id="reportButton" class="btn btn-success" onclick="openReportModal()" style="display:none; background: #8b5cf6;">
+                        <i class="fas fa-clipboard-list"></i> Отчет по отгрузке
+                    </button>
+                </div>
             </div>
 
             <div class="filters-section">
@@ -159,7 +168,7 @@
                 </div>
                 <div class="filter-group">
                     <label><i class="fas fa-search"></i> Поиск по товарам:</label>
-                    <input type="text" id="searchInput" placeholder="Наименование или бренд..." oninput="filterProducts()">
+                    <input type="text" id="searchInput" placeholder="Наименование, бренд или баркод..." oninput="filterProducts()">
                 </div>
             </div>
 
@@ -168,18 +177,19 @@
                     <thead>
                         <tr>
                             <th onclick="sortTable('warehouse')">Склад <i class="fas fa-sort"></i></th>
-                            <th onclick="sortTable('seller_article')">Артикул продавца <i class="fas fa-sort"></i></th>
+                            <th onclick="sortTable('seller_article')">Артикул <i class="fas fa-sort"></i></th>
+                            <th onclick="sortTable('barcode')">Баркод <i class="fas fa-sort"></i></th>
                             <th onclick="sortTable('size')">Размер <i class="fas fa-sort"></i></th>
                             <th onclick="sortTable('name')">Наименование <i class="fas fa-sort"></i></th>
                             <th onclick="sortTable('brand')">Бренд <i class="fas fa-sort"></i></th>
                             <th onclick="sortTable('sold')">Продано <i class="fas fa-sort"></i></th>
                             <th onclick="sortTable('stock')">Остаток <i class="fas fa-sort"></i></th>
                             <th onclick="sortTable('sales_per_day')">Продажи/день <i class="fas fa-sort"></i></th>
-                            <th onclick="sortTable('needed_45')">Нужно на 45 дней <i class="fas fa-sort"></i></th>
+                            <th onclick="sortTable('needed_45')">Нужно на 45д <i class="fas fa-sort"></i></th>
                             <th onclick="sortTable('to_supply')">К поставке <i class="fas fa-sort"></i></th>
                             <th onclick="sortTable('days_to_zero')">Дней до 0 <i class="fas fa-sort"></i></th>
                             <th onclick="sortTable('risk_date')">Дата риска <i class="fas fa-sort"></i></th>
-                            <th>Доставка дней</th>
+                            <th>Доставка</th>
                             <th>Запуск сборки</th>
                             <th>Активность</th>
                         </tr>
@@ -240,15 +250,15 @@
                 <table class="data-table summary-table" id="summaryTable">
                     <thead>
                         <tr>
-                            <th>Артикул продавца</th>
+                            <th>Артикул</th>
                             <th>Наименование</th>
                             <th>Размер</th>
                             <th>Бренд</th>
-                            <th>Всего продано/мес</th>
-                            <th>Всего остаток</th>
+                            <th>Продано/мес</th>
+                            <th>Остаток</th>
                             <th>Продажи/день</th>
-                            <th>Нужно на складе (45д)</th>
-                            <th>Самый ранний запуск</th>
+                            <th>Нужно (45д)</th>
+                            <th>Ранний запуск</th>
                             <th>Статус</th>
                         </tr>
                     </thead>
@@ -289,6 +299,43 @@
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Модальное окно формирования отчета по отгрузке -->
+    <div id="reportModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="close" onclick="closeReportModal()">&times;</span>
+            <h2><i class="fas fa-file-excel"></i> Формирование отгрузки</h2>
+            <p style="margin-bottom: 20px; color: var(--text-secondary);">
+                Склад: <strong id="reportWarehouseName"></strong><br>
+                <small>✅ Срочные товары выбраны автоматически. Отметьте дополнительные позиции.</small>
+            </p>
+
+            <div style="max-height: 400px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 20px;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead style="background: var(--primary-color); color: white; position: sticky; top: 0;">
+                        <tr>
+                            <th style="padding: 12px; text-align: left; width: 40px;">✓</th>
+                            <th style="padding: 12px; text-align: left;">Артикул</th>
+                            <th style="padding: 12px; text-align: left;">Наименование</th>
+                            <th style="padding: 12px; text-align: left;">Дата запуска</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reportItemsList" style="background: white;">
+                        <!-- Данные подставляются динамически -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="form-actions">
+                <button class="btn btn-success" onclick="generateReport()">
+                    <i class="fas fa-file-excel"></i> Сформировать Excel
+                </button>
+                <button class="btn btn-secondary" onclick="closeReportModal()">
+                    <i class="fas fa-times"></i> Отмена
+                </button>
+            </div>
         </div>
     </div>
 

@@ -6,6 +6,10 @@ let currentSortColumn = '';
 let currentSortDirection = 'asc';
 let currentWarehouseFilter = '';
 
+// ========== Переменные для отчета ==========
+let currentReportProducts = [];
+let selectedForReport = new Set();
+
 // Ключи для localStorage
 const STORAGE_KEYS = {
     PRODUCTS: 'wb_products',
@@ -127,9 +131,9 @@ function saveProductsToStorage() {
     try {
         console.log('💾 Сохраняем товары в localStorage');
         const productsToSave = allProducts.map(({ 
-            id, warehouse, seller_article, size, name, brand, sold, stock 
+            id, warehouse, seller_article, barcode, size, name, brand, sold, stock 
         }) => ({
-            id, warehouse, seller_article, size, name, brand, sold, stock
+            id, warehouse, seller_article, barcode, size, name, brand, sold, stock
         }));
         localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(productsToSave));
         console.log(`✅ Товары сохранены: ${productsToSave.length} шт.`);
@@ -558,25 +562,25 @@ function readFile(file) {
                     const obj = {};
                     headers.forEach((header, index) => {
                         if (header && header.trim()) {
-                            const headerClean = header.trim();
+                            const headerClean = header.trim().toLowerCase();
                             let value = row[index] || '';
                             
                             // Пробуем разные варианты названий
-                            if (headerClean.includes('Склад') || headerClean.includes('склад')) {
+                            if (headerClean.includes('склад')) {
                                 obj.warehouse = String(value).trim();
-                            } else if (headerClean.includes('Артикул продавца') || headerClean.includes('артикул')) {
+                            } else if (headerClean.includes('артикул продавца')) {
                                 obj.seller_article = String(value).trim();
-                            } else if (headerClean.includes('Размер') || headerClean.includes('размер')) {
+                            } else if (headerClean.includes('баркод') || headerClean.includes('штрихкод') || headerClean.includes('barcode')) {
+                                obj.barcode = String(value).trim();
+                            } else if (headerClean.includes('размер')) {
                                 obj.size = String(value).trim();
-                            } else if (headerClean.includes('Наименование') || headerClean.includes('наименование')) {
+                            } else if (headerClean.includes('наименование')) {
                                 obj.name = String(value).trim();
-                            } else if (headerClean.includes('Бренд') || headerClean.includes('бренд')) {
+                            } else if (headerClean.includes('бренд')) {
                                 obj.brand = String(value).trim();
-                            } else if (headerClean.includes('Продано') || headerClean.includes('продано') || 
-                                      headerClean.includes('Выкупили')) {
+                            } else if (headerClean.includes('продано') || headerClean.includes('выкупили')) {
                                 obj.sold = Number(value) || 0;
-                            } else if (headerClean.includes('Остаток') || headerClean.includes('остаток') || 
-                                      headerClean.includes('Текущий остаток')) {
+                            } else if (headerClean.includes('остаток') || headerClean.includes('текущий остаток')) {
                                 obj.stock = Number(value) || 0;
                             }
                         }
@@ -584,6 +588,10 @@ function readFile(file) {
                     
                     // Добавляем только если есть склад и артикул
                     if (obj.warehouse && obj.seller_article) {
+                        // Если баркод не найден, ставим заглушку
+                        if (!obj.barcode) {
+                            obj.barcode = 'Н/Д';
+                        }
                         result.push(obj);
                     }
                 });
@@ -651,6 +659,7 @@ async function processData(data) {
             id: generateId(),
             warehouse: row.warehouse,
             seller_article: String(row.seller_article || ''),
+            barcode: String(row.barcode || 'Н/Д'),
             size: String(row.size || ''),
             name: row.name || '',
             brand: row.brand || '',
@@ -733,6 +742,8 @@ function displayWarehouses() {
 }
 
 // ========== ОТОБРАЖЕНИЕ ТОВАРОВ ==========
+let currentFilteredProducts = [];
+
 function displayProducts() {
     const tbody = document.getElementById('productsTableBody');
     if (!tbody) return;
@@ -740,7 +751,7 @@ function displayProducts() {
     if (allProducts.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="15" class="empty-state">
+                <td colspan="16" class="empty-state">
                     <i class="fas fa-inbox"></i>
                     <h3>Нет данных</h3>
                     <p>Загрузите файл с данными на главной странице</p>
@@ -765,15 +776,19 @@ function displayProducts() {
         filteredProducts = filteredProducts.filter(p => p.seller_article === articleFilter);
     }
     
-    // Поиск по названию и бренду
+    // Поиск по названию, бренду и баркоду
     const searchInput = document.getElementById('searchInput');
     const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
     if (searchTerm) {
         filteredProducts = filteredProducts.filter(p => 
             (p.name && p.name.toLowerCase().includes(searchTerm)) ||
-            (p.brand && p.brand.toLowerCase().includes(searchTerm))
+            (p.brand && p.brand.toLowerCase().includes(searchTerm)) ||
+            (p.barcode && p.barcode.toLowerCase().includes(searchTerm))
         );
     }
+    
+    // Сохраняем для экспорта
+    currentFilteredProducts = filteredProducts;
     
     // Применить сортировку
     if (currentSortColumn) {
@@ -809,6 +824,7 @@ function displayProducts() {
             <tr class="${urgencyClass}">
                 <td>${product.warehouse || ''}</td>
                 <td><strong>${product.seller_article || ''}</strong></td>
+                <td><strong>${product.barcode || 'Н/Д'}</strong></td>
                 <td>${product.size || ''}</td>
                 <td>${product.name || ''}</td>
                 <td>${product.brand || ''}</td>
@@ -829,6 +845,20 @@ function displayProducts() {
     
     // Обновляем счетчик результатов
     updateResultsCount(filteredProducts.length, allProducts.length);
+    
+    // Показываем/скрываем кнопки
+    const exportBtn = document.getElementById('exportButton');
+    const reportBtn = document.getElementById('reportButton');
+    
+    if (exportBtn && reportBtn) {
+        if (currentWarehouseFilter && filteredProducts.length > 0) {
+            exportBtn.style.display = 'inline-flex';
+            reportBtn.style.display = 'inline-flex';
+        } else {
+            exportBtn.style.display = 'none';
+            reportBtn.style.display = 'none';
+        }
+    }
     
     // Показываем подсказку прокрутки
     showScrollHint('productsTable');
@@ -982,6 +1012,13 @@ function clearWarehouseFilter() {
     if (backButton) {
         backButton.style.display = 'none';
     }
+    
+    // Скрываем кнопки
+    const exportBtn = document.getElementById('exportButton');
+    const reportBtn = document.getElementById('reportButton');
+    
+    if (exportBtn) exportBtn.style.display = 'none';
+    if (reportBtn) reportBtn.style.display = 'none';
     
     const filterSelect = document.getElementById('warehouseFilter');
     if (filterSelect) {
@@ -1356,6 +1393,189 @@ function filterByArticle(article) {
     displayProducts();
 }
 
+// ========== ЭКСПОРТ ВСЕХ ТОВАРОВ СКЛАДА ==========
+function exportToExcel() {
+    if (!currentWarehouseFilter || currentFilteredProducts.length === 0) {
+        alert('Нет данных для экспорта');
+        return;
+    }
+    
+    try {
+        console.log('📤 Экспорт данных для склада:', currentWarehouseFilter);
+        
+        // Формируем данные для экспорта: только баркод и количество к поставке
+        const exportData = currentFilteredProducts.map(product => ({
+            'Баркод': product.barcode || 'Н/Д',
+            'Количество к поставке': product.to_supply || 0
+        }));
+        
+        // Если нужна сортировка по баркоду
+        exportData.sort((a, b) => String(a['Баркод']).localeCompare(String(b['Баркод'])));
+        
+        // Создаем рабочий лист
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        
+        // Добавляем лист в книгу
+        XLSX.utils.book_append_sheet(wb, ws, 'Отгрузка');
+        
+        // Генерируем имя файла с датой и названием склада
+        const date = new Date();
+        const dateStr = `${date.getDate()}.${date.getMonth() + 1}.${date.getFullYear()}`;
+        const warehouseName = currentWarehouseFilter.replace(/[^a-zа-яё0-9]/gi, '_').toLowerCase();
+        const fileName = `otgruzka_${warehouseName}_${dateStr}.xlsx`;
+        
+        // Сохраняем файл
+        XLSX.writeFile(wb, fileName);
+        
+        console.log('✅ Файл экспортирован:', fileName);
+        
+    } catch (error) {
+        console.error('❌ Ошибка экспорта:', error);
+        alert('Ошибка при создании файла: ' + error.message);
+    }
+}
+
+// ========== ОТЧЕТ ПО ОТГРУЗКЕ (С ВЫБОРОМ) ==========
+function openReportModal() {
+    if (!currentWarehouseFilter || currentFilteredProducts.length === 0) {
+        alert('Нет данных для формирования отчета');
+        return;
+    }
+
+    // Сохраняем текущий список товаров (уже отфильтрованный по складу)
+    currentReportProducts = [...currentFilteredProducts];
+    
+    // Сбрасываем выбор (кроме срочных)
+    selectedForReport.clear();
+    
+    // Заполняем название склада в шапке
+    document.getElementById('reportWarehouseName').textContent = currentWarehouseFilter;
+    
+    // Формируем список товаров
+    const tbody = document.getElementById('reportItemsList');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    tbody.innerHTML = currentReportProducts.map(product => {
+        const isUrgent = product.is_urgent || product.assembly_start === 'СРОЧНО!';
+        let dateDisplay = product.assembly_start;
+        let isWithin30Days = false;
+        
+        // Если дата не "СРОЧНО!" и есть реальная дата, проверяем ближайшие 30 дней
+        if (!isUrgent && product.assembly_date) {
+            const assemblyDate = new Date(product.assembly_date);
+            assemblyDate.setHours(0, 0, 0, 0);
+            const diffDays = Math.ceil((assemblyDate - today) / (1000 * 60 * 60 * 24));
+            
+            if (diffDays >= 0 && diffDays <= 30) {
+                isWithin30Days = true;
+                dateDisplay = formatDate(assemblyDate) + ` (через ${diffDays} дн.)`;
+            }
+        }
+        
+        // Автоматически выбираем срочные
+        if (isUrgent) {
+            selectedForReport.add(product.id);
+        }
+        
+        // Показываем только срочные и ближайшие 30 дней
+        if (!isUrgent && !isWithin30Days) return '';
+        
+        const checked = isUrgent ? 'checked disabled' : '';
+        
+        return `
+            <tr>
+                <td style="padding: 12px; text-align: center;">
+                    <input type="checkbox" class="report-checkbox" 
+                           data-id="${product.id}"
+                           onchange="toggleReportItem('${product.id}')"
+                           ${checked}>
+                </td>
+                <td style="padding: 12px;"><strong>${product.seller_article || ''}</strong></td>
+                <td style="padding: 12px;">${product.name || ''}</td>
+                <td style="padding: 12px;">
+                    <span class="${isUrgent ? 'badge badge-urgent' : ''}">
+                        ${dateDisplay}
+                    </span>
+                </td>
+            </tr>
+        `;
+    }).join('');
+    
+    // Показываем модальное окно
+    document.getElementById('reportModal').style.display = 'block';
+}
+
+function toggleReportItem(productId) {
+    if (selectedForReport.has(productId)) {
+        selectedForReport.delete(productId);
+    } else {
+        selectedForReport.add(productId);
+    }
+}
+
+function generateReport() {
+    if (selectedForReport.size === 0) {
+        alert('Не выбрано ни одного товара для отгрузки');
+        return;
+    }
+    
+    // Собираем данные для экспорта
+    const exportData = [];
+    
+    // Перебираем все товары текущего склада
+    currentReportProducts.forEach(product => {
+        if (selectedForReport.has(product.id)) {
+            exportData.push({
+                'Баркод': product.barcode || 'Н/Д',
+                'Количество к поставке': product.to_supply || 0,
+                'Артикул': product.seller_article,        // служебное, для сортировки
+                'Дата запуска': product.assembly_start     // служебное
+            });
+        }
+    });
+    
+    // Сортируем: сначала срочные, потом по дате
+    exportData.sort((a, b) => {
+        if (a['Дата запуска'] === 'СРОЧНО!' && b['Дата запуска'] !== 'СРОЧНО!') return -1;
+        if (a['Дата запуска'] !== 'СРОЧНО!' && b['Дата запуска'] === 'СРОЧНО!') return 1;
+        return String(a['Артикул']).localeCompare(String(b['Артикул']));
+    });
+    
+    // Убираем служебные поля
+    const finalData = exportData.map(({ 'Баркод': b, 'Количество к поставке': k }) => ({
+        'Баркод': b,
+        'Количество к поставке': k
+    }));
+    
+    try {
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(finalData);
+        XLSX.utils.book_append_sheet(wb, ws, 'Отгрузка');
+        
+        const date = new Date();
+        const dateStr = `${date.getDate()}.${date.getMonth() + 1}.${date.getFullYear()}`;
+        const warehouseName = currentWarehouseFilter.replace(/[^a-zа-яё0-9]/gi, '_').toLowerCase();
+        const fileName = `otgruzka_${warehouseName}_${dateStr}.xlsx`;
+        
+        XLSX.writeFile(wb, fileName);
+        
+        // Закрываем модальное окно
+        closeReportModal();
+        
+        console.log('✅ Отчет сформирован:', fileName);
+    } catch (error) {
+        console.error('❌ Ошибка формирования отчета:', error);
+        alert('Ошибка при создании файла: ' + error.message);
+    }
+}
+
+function closeReportModal() {
+    document.getElementById('reportModal').style.display = 'none';
+    selectedForReport.clear();
+}
+
 // ========== ПОДСКАЗКА ПРОКРУТКИ ==========
 function showScrollHint(tableId) {
     const table = document.getElementById(tableId);
@@ -1617,8 +1837,14 @@ function updateStats() {
 
 // Закрытие модального окна при клике вне его
 window.onclick = function(event) {
-    const modal = document.getElementById('editModal');
-    if (event.target === modal) {
+    const editModal = document.getElementById('editModal');
+    const reportModal = document.getElementById('reportModal');
+    
+    if (event.target === editModal) {
         closeEditModal();
+    }
+    
+    if (event.target === reportModal) {
+        closeReportModal();
     }
 }
